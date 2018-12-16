@@ -1,6 +1,6 @@
 const fs = require('fs');
 const oids = require('./oids');
-
+const filename = require('./config')['filename'];
 
 const types = {
   0X30: 'SEQUENCE',
@@ -164,7 +164,11 @@ function formatCert(asn1) {
     } else if (i == 2) {
       let str = '';
       asn1_1[keys[i]].forEach(val => {
-        str += val.toString(16);
+        if (val > 16) {
+          str += val.toString(16);
+        } else {
+          str += '0' + val.toString(16);
+        }
       });
       obj['signature value'] = str;
     }
@@ -178,7 +182,11 @@ function formatCert(asn1) {
     } else if (i == 1) {
       let str = '';
       tbsCert[tbsKeys[i]].forEach(val => {
-        str += val.toString(16);
+        if (val > 16) {
+          str += val.toString(16);
+        } else {
+          str += '0' + val.toString(16);
+        }
       });
       obj['serial number'] = str;
     } else if (i == 2) {
@@ -216,7 +224,11 @@ function formatCert(asn1) {
       obj['name of algorithm of subject public key'] = publicKeyType[Object.keys(publicKeyType)[1]]['d'];
       let str = '';
       publicKeyString.forEach(val => {
-        str += val.toString(16);
+        if (val > 16) {
+          str += val.toString(16);
+        } else {
+          str += '0' + val.toString(16);
+        }
       });
       obj['subject public key'] = str;
     }
@@ -225,6 +237,13 @@ function formatCert(asn1) {
 }
 
 
-let content = fs.readFileSync('./assets/wikipedia.cer');
+// const filename = 'wikipedia.cer';
+let content = fs.readFileSync('./assets/' + filename);
 const result = decodeCert(content, 0, content.length);
-console.dir(formatCert(result[0]), { depth: null });
+const certResult = formatCert(result[0]);
+const str = JSON.stringify(certResult, undefined, 2);
+fs.writeFile('./' + filename.split('.')[0] + '.json', str, (err) => {
+  if (!err) {
+    console.log('complete');
+  }
+});
