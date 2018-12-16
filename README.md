@@ -1,2 +1,2 @@
 # ASN1-PARSER
-implement of simple ASN-1 parser
+implement of simple certificate parser
