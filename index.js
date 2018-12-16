@@ -1,6 +1,7 @@
 const fs = require('fs');
 const oids = require('./oids');
 
+
 const types = {
   0X30: 'SEQUENCE',
   0XA0: '[0]',
@@ -43,7 +44,7 @@ function decodeCert(buffer, begin, end) {
     nextBegin ++;
   }
   if (tag == 'INTEGER') {
-    let data = buffer.slice(nextBegin, end);
+    let data = buffer.slice(nextBegin, nextBegin + len);
     obj[tag] = data;
   } else if (tag == 'OBJECT IDENTIFIER') {
     // console.log('bb');
@@ -98,9 +99,9 @@ function decodeCert(buffer, begin, end) {
     obj[tag] = data;
   } else if (tag == 'UTCTime') {
     let data = buffer.slice(nextBegin, end);
-    let date = '';
-    for (let i = 0; i < data.length; i += 2) {
-      if (i == data.length - 1) {
+    let date = '20';
+    for (let i = 0; i < 13; i += 2) {
+      if (i == 12) {
         break;
       }
       let b1 = data[i];
@@ -110,6 +111,7 @@ function decodeCert(buffer, begin, end) {
       date += String(b1 * 10 + b2) + '-';
     }
     date += 'UTC';
+    obj[tag] = date;
   } else if (tag == 'BOOLEAN') {
     obj[tag] = '';
   } else if (tag == 'BIT STRING') {
@@ -134,8 +136,95 @@ function decodeCert(buffer, begin, end) {
   return [obj, nextBegin - begin + len];
 }
 
-let content = fs.readFileSync('./facebook.cer');
-// content = content.slice(192, 192 + 2 + 105);
+function formatCert(asn1) {
+  let obj = {
+    'version': '',
+    'serial number': '',
+    'name of algorithm of signature': '',
+    'param of signature': 'NULL',
+    'issuer': {},
+    'validity': {},
+    'subject': {},
+    'name of algorithm of subject public key': '',
+    'param of algorithm of subject public key' : 'NULL',
+    'subject public key': '',
+    'name of signature algorithm': '',
+    'param of signature algorithm': 'NULL',
+    'signature value': ''
+  };
+  // layer1
+  const asn1_1 = asn1['SEQUENCE'];
+  let tbsCert = {};
+  const keys = Object.keys(asn1_1);
+  for (let i in keys) {
+    if (i == 0) {
+      tbsCert = asn1_1[keys[i]];
+    } else if (i == 1) {
+      obj['name of signature algorithm'] = asn1_1[keys[i]]['OBJECT IDENTIFIER']['d'];
+    } else if (i == 2) {
+      let str = '';
+      asn1_1[keys[i]].forEach(val => {
+        str += val.toString(16);
+      });
+      obj['signature value'] = str;
+    }
+  }
+  // layer2
+  const tbsKeys = Object.keys(tbsCert);
+  for (let i in tbsKeys) {
+    if (i == 0) {
+      const version = tbsCert[tbsKeys[i]]['INTEGER'];
+      obj['version'] = 'v' + (version[0] + 1);
+    } else if (i == 1) {
+      let str = '';
+      tbsCert[tbsKeys[i]].forEach(val => {
+        str += val.toString(16);
+      });
+      obj['serial number'] = str;
+    } else if (i == 2) {
+      obj['name of algorithm of signature'] = tbsCert[tbsKeys[i]]['OBJECT IDENTIFIER']['d'];
+    } else if (i == 3) {
+      const issuer = tbsCert[tbsKeys[i]];
+      for (let key in issuer) {
+        let newKey = issuer[key]['SEQUENCE']['OBJECT IDENTIFIER']['d'];
+        let newValue = issuer[key]['SEQUENCE']['PrintableString'];
+        obj['issuer'][newKey] = newValue;
+      }
+    } else if (i == 4) {
+      const utcTime = tbsCert[tbsKeys[i]];
+      let from = utcTime[Object.keys(utcTime)[0]];
+      let to = utcTime[Object.keys(utcTime)[1]];
+      obj['validity'] = {
+        'from' : from,
+        'to': to
+      };
+    } else if (i == 5) {
+      const subject = tbsCert[tbsKeys[i]];
+      for (let key in subject) {
+        let newKey = subject[key]['SEQUENCE']['OBJECT IDENTIFIER']['d'];
+        let newValue = '';
+        if ('PrintableString' in subject[key]['SEQUENCE']) {
+          newValue = subject[key]['SEQUENCE']['PrintableString'];
+        } else if ('UTF8String' in subject[key]['SEQUENCE']) {
+          newValue = subject[key]['SEQUENCE']['UTF8String'];
+        }
+        obj['subject'][newKey] = newValue;
+      }
+    } else if (i == 6) {
+      const publicKeyType = tbsCert[tbsKeys[i]]['SEQUENCE'];
+      const publicKeyString = tbsCert[tbsKeys[i]]['BIT STRING'];
+      obj['name of algorithm of subject public key'] = publicKeyType[Object.keys(publicKeyType)[1]]['d'];
+      let str = '';
+      publicKeyString.forEach(val => {
+        str += val.toString(16);
+      });
+      obj['subject public key'] = str;
+    }
+  }
+  return obj;
+}
 
+
+let content = fs.readFileSync('./assets/wikipedia.cer');
 const result = decodeCert(content, 0, content.length);
-console.log(result[0]);
+console.dir(formatCert(result[0]), { depth: null });
